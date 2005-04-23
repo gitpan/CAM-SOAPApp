@@ -1,0 +1,80 @@
+2005-04-22 23:04  chris
+
+	* Build.PL, lib/CAM/SOAPApp.pm: fixes
+
+2005-04-22 23:01  chris
+
+	* Build.PL, LICENSE, MANIFEST, README, index.html,
+	  lib/CAM/SOAPApp.pm: v1.05 Relicense
+
+2004-06-02 17:23  chris
+
+	* Build.PL: little bug fix
+
+2004-06-02 17:21  chris
+
+	* Build.PL, lib/CAM/SOAPApp.pm: v1.04 Add support for daemon mode
+	  to work with challenged clients
+
+2003-09-15 18:15  chris
+
+	* index.html: Oops, add <p> tags to index.html
+
+2003-09-15 18:08  chris
+
+	* Build.PL, LICENSE, MANIFEST, Makefile.PL, README, SOAPApp.pm,
+	  index.html, test.pl, lib/CAM/SOAPApp.pm, t/lenient.t, t/server.t,
+	  t/Example/Server.pm: v1.03 Updated for new build and license
+	  architecture Added full regression tests Rewrote README
+	  description
+
+2003-08-08 12:03  chris
+
+	* SOAPApp.pm:	v1.02
+	  Added a workaround to fix the Safari 1.0 POST bug from Flash:
+
+	  Safari truncates the last byte of the POST, so this workaround
+	  detects a trailing tag that looks like '</SOAP-ENV:Envelope' and
+	  adds the missing '>' at the end.
+
+2003-06-18 15:39  chris
+
+	* SOAPApp.pm: v1.0.1 Workaround a strange feature of SOAP::SOM in
+	  retrieving the soapdata arguments
+
+2003-04-18 14:01  chris
+
+	* SOAPApp.pm: More documentation
+
+2003-04-11 10:37  chris
+
+	* SOAPApp.pm: Correction in last cvs log: I meant 1.00, not 0.03
+
+2003-04-11 10:29  chris
+
+	* COPYRIGHT, MANIFEST, README, SOAPApp.pm: v0.03 License correction
+	  Pass an undef CGI to prevent a CGI object from being
+	  instantiated.
+
+2003-04-08 08:55  chris
+
+	* SOAPApp.pm: v0.02 Bug fix: include wrong transport package
+
+2003-03-27 13:55  chris
+
+	* SOAPApp.pm: little bug fix doc cleanup
+
+2003-03-26 16:45  chris
+
+	* SOAPApp.pm: Fix missing documentation end flag (=cut)
+
+2003-03-26 16:30  chris
+
+	* COPYRIGHT, MANIFEST, Makefile.PL, README, SOAPApp.pm, test.pl:
+	  Initial revision
+
+2003-03-26 16:30  chris
+
+	* COPYRIGHT, MANIFEST, Makefile.PL, README, SOAPApp.pm, test.pl:
+	  initial import
+

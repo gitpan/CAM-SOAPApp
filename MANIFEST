@@ -1,0 +1,13 @@
+index.html
+lib/CAM/SOAPApp.pm
+ChangeLog
+Build.PL
+Makefile.PL
+LICENSE
+MANIFEST
+README
+t/lenient.t
+t/server.t
+t/Example/Server.pm
+META.yml
+
