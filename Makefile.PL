@@ -1,24 +1,34 @@
+use strict;
 use ExtUtils::MakeMaker qw(WriteMakefile prompt);
 
-open(FILE,"<t/server.t");
+## Get user's permission to run SOAP tests against a local server
+
+# Get port and timeout numbers from the regression test
 my ($PORT, $TIMEOUT);
-while (<FILE>)
+open my $file, '<', File::Spec->catfile('t', 'server.t');
+while (<$file>)
 {
-   /\$PORT = (\d+)/ && ($PORT = $1);
-   /\$TIMEOUT = (\d+)/ && ($TIMEOUT = $1);
+   m/\$PORT \s* = \s* (\d+)    /xms && ($PORT = $1);
+   m/\$TIMEOUT \s* = \s* (\d+) /xms && ($TIMEOUT = $1);
 }
-close(FILE);
+close $file;
 
-print("Most of the tests require a live SOAP server.  We will start a\n" .
-      "server on your computer listening on localhost port $PORT.\n" .
-      "This server will will be killed at the end of the tests, or\n" .
-      "after $TIMEOUT seconds, whichever comes first.\n" .
-      "\n");
+# Warn user
+print <<"EOM";
+Most of the tests require a live SOAP server.  We will start a
+server on your computer listening on localhost port $PORT.
+This server will be killed at the end of the tests, or
+after $TIMEOUT seconds, whichever comes first.
 
-unlink("t/ENABLED");
-if (prompt("Do you want to enable these tests?", "y") =~ /^y/i) {
-   open(ENABLED, ">t/ENABLED") || die "Can't enable: $!";
-   close(ENABLED);
+EOM
+
+# Ask for permission
+my $enable_filename = File::Spec->catfile('t', 'ENABLED');
+unlink $enable_filename;
+if (prompt('Do you want to enable these tests?', 'y') =~ /^y/i)
+{
+   open my $enabled, '>', $enable_filename or die 'Failed to enable: '.$!;
+   close $enabled;
 }
 
 WriteMakefile(

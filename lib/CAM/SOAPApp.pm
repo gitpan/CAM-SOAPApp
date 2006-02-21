@@ -1,12 +1,24 @@
 package CAM::SOAPApp;
 
+use warnings;
+use strict;
+require 5.005_62;
+
+use SOAP::Lite;
+use base 'CAM::App';
+
+our $VERSION = '1.06';
+
+
+=for stopwords BadID SOAPAction SOAPApp
+
 =head1 NAME
 
 CAM::SOAPApp - SOAP application framework
 
 =head1 LICENSE
 
-Copyright 2005 Clotho Advanced Media, Inc., <cpan@clotho.com>
+Copyright 2006 Clotho Advanced Media, Inc., <cpan@clotho.com>
 
 This library is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
@@ -27,15 +39,15 @@ this example:
   sub isLeapYear {
      my $pkg = shift;
      my $app = CAM::SOAPApp->new(soapdata => \@_);
-     unless ($app) {
-        CAM::SOAPApp->error("Internal", "Failed to initialize the SOAP app");
+     if (!$app) {
+        CAM::SOAPApp->error('Internal', 'Failed to initialize the SOAP app');
      }
      my %data = $app->getSOAPData();
-     unless (defined $data{year}) {
-        $app->error("NoYear", "No year specified in the query");
+     if (!defined $data{year}) {
+        $app->error('NoYear', 'No year specified in the query');
      }
-     unless ($data{year} =~ /^\d+$/) {
-        $app->error("BadYear", "The year must be an integer");
+     if ($data{year} !~ /^\d+$/) {
+        $app->error('BadYear', 'The year must be an integer');
      }
      my $leapyear = ($data{year} % 4 == 0 && 
                      ($data{year} % 100 != 0 || 
@@ -57,27 +69,12 @@ the CAM::App and CAM::SOAPApp methods would be exposed as SOAP
 methods, which would be a big security hole, so don't make that
 mistake.
 
-=cut
-
-#--------------------------------#
-
-require 5.005_62;
-use strict;
-use warnings;
-use SOAP::Lite;
-use CAM::App;
-
-our @ISA = qw(CAM::App);
-our $VERSION = '1.05';
-
-#--------------------------------#
-
 =head1 OPTIONS
 
 When loading this module, there are a few different options that can
 be selected.  These can be mixed and matched as desired.
 
-=over 4
+=over
 
 =item use CAM::SOAPApp;
 
@@ -93,7 +90,7 @@ Sherlock 3).
 
 Specifically, the tweaks include the following:
 
-=over 4
+=over
 
 =item Content-Type
 
@@ -102,12 +99,12 @@ incorrectly.
 
 =item SOAPAction
 
-Replaces missing SOAPAction header fields with "".
+Replaces missing SOAPAction header fields with ''.
 
 =item Charset
 
-Turns off charset output for the Content-Type (i.e. "text/xml" instead
-of "text/xml; charset=utf-8").
+Turns off charset output for the Content-Type (i.e. 'text/xml' instead
+of 'text/xml; charset=utf-8').
 
 =item HTTP 500
 
@@ -140,14 +137,18 @@ sub import
    my $pkg = shift;
    while (@_ > 0)
    {
-      my $key = shift;
+      my $key = lc shift;
       my $value = shift;
-      if ($key =~ /^-?lenient$/i && $value)
+      $key =~ s/\A -//xms; # leading dash is optional
+
+      if ($key eq 'lenient' && $value)
       {
-         ## No longer applicable.  This works fine with v0.60
+         ### This is a SOAP::Lite version check, but is no longer applicable. 
+         ### The changes further below work fine with SOAP::Lite v0.55 - v0.67
+
          #if (!$CAM::SOAPApp::NO_SOAP_LITE_WARNING &&
          #    (!defined $SOAP::Lite::VERSION ||
-         #     $SOAP::Lite::VERSION ne "0.55"))
+         #     $SOAP::Lite::VERSION ne '0.55'))
          #{
          #   warn("SOAP::Lite version is not v0.55\n".
          #        "  $pkg lenient mode is optimized for SOAP::Lite v0.55.\n" .
@@ -165,21 +166,28 @@ sub import
          $SOAP::Constants::DO_NOT_CHECK_CONTENT_TYPE = 1;
 
          # CGI version
-         unless ($ENV{CONTENT_TYPE} &&
-                 ($ENV{CONTENT_TYPE} =~ /^text\/xml/ ||
-                  $ENV{CONTENT_TYPE} =~ /^multipart\/(related|form-data)/))
+         if (!$ENV{CONTENT_TYPE} ||
+             $ENV{CONTENT_TYPE} !~ m{\A (?: text/xml | multipart/(?:related|form-data) ) }xms)
          {
-            $ENV{CONTENT_TYPE} = "text/xml";
+            $ENV{CONTENT_TYPE} = 'text/xml';
          }
 
-         # Daemon version
+         # Daemon support
          *SOAP::Transport::HTTP::Daemon::request = sub
          {
             my $self = shift->new;
             if (@_)
             {
                $self->{_request} = shift;
-               $self->{_request}->content_type("text/xml");
+               $self->{_request}->content_type('text/xml');
+               # work around an 'uninitialized' warning
+               if (SOAP::Lite->VERSION() =~ m/\A 0.6[67] /xms)
+               {
+                  if (! defined $self->request->header('Expect'))
+                  {
+                     $self->request->header('Expect', q{});
+                  }
+               }
                return $self;
             }
             else
@@ -192,19 +200,19 @@ sub import
          ## Allow missing SOAPAction header values (needed for Flash 6
          ## which cannot send arbitrary HTTP headers)
 
-         # CGI version
-         $ENV{HTTP_SOAPACTION} ||= '""';
+         # CGI support
+         $ENV{HTTP_SOAPACTION} ||= q{""};
 
          # Daemon version
          # Patch to return '""' instead of undef
          {
-            no warnings; # quiet the redefined sub warning
+            no warnings 'redefine'; ## no critic - quiet the redefined sub warning
             *SOAP::Server::action = sub
             {
                my $self = shift->new;
                @_ ? 
                    ($self->{_action} = shift, return $self) :
-                   return $self->{_action} || '""';
+                   return $self->{_action} || q{""};
             };
          }
 
@@ -223,16 +231,24 @@ sub import
          ## missing ">" at the end of the XML request and appends it.
          require SOAP::Transport::HTTP;
          {
-            no warnings; # quiet the redefined sub warning
+            no warnings 'redefine'; ## no critic - quiet the redefined sub warning
             *SOAP::Transport::HTTP::Server::request = sub {
                my $self = shift->new;
                if (@_)
                {
                   $self->{_request} = shift;
-                  if ($self->request->content =~ m|</[\w:-]+$|)
+                  if ($self->request->content =~ m{ </[\w:-]+\z }xms)
                   {
                      # close unclosed tag
-                     $self->request->content($self->request->content . ">");
+                     $self->request->content($self->request->content . '>');
+                  }
+                  # work around an 'uninitialized' warning
+                  if (SOAP::Lite->VERSION() =~ m/\A 0.6[67] /xms)
+                  {
+                     if (! defined $self->request->header('Expect'))
+                     {
+                        $self->request->header('Expect', q{});
+                     }
                   }
                   return $self;
                }
@@ -243,7 +259,7 @@ sub import
             };
          }
       }
-      elsif ($key =~ /^-?handle$/i && $value)
+      elsif ($key eq 'handle' && $value)
       {
          require SOAP::Transport::HTTP;
          SOAP::Transport::HTTP::CGI
@@ -251,19 +267,14 @@ sub import
              -> handle;
       }
    }
+   return;
 }
-
-#--------------------------------#
 
 =head1 METHODS
 
-=over 4
+=over
 
-=cut
-
-#--------------------------------#
-
-=item new soapdata => ARRAYREF
+=item CAM::SOAPApp->new(soapdata => \@array)
 
 Create a new application instance.  The arguments passed to the SOAP
 method should all be passed verbatim to this method as a reference,
@@ -280,32 +291,31 @@ less the package reference.  This should be like the following:
 sub new
 {
    my $pkg = shift;
-   my %args = (@_);
+   my %args = @_;
 
    my $self = $pkg->SUPER::new(cgi => undef, @_);
 
    my $soapdata = $args{soapdata};
    my $tail = $soapdata->[-1];
-   if ($tail && ref($tail) && UNIVERSAL::isa($tail => 'SOAP::SOM'))
+   if (eval{ $tail->isa('SOAP::SOM') })
    {
-      $self->{envelope} = pop @$soapdata;  # remove tail from the list
+      $self->{envelope} = pop @{$soapdata};  # remove tail from the list
       # get the envelope data, or the empty set
       # Note: method() returns "" on no data, hence the "|| {}" below
       $self->{soapdata} = $self->{envelope}->method() || {};
    }
    else
    {
-      if (@$soapdata % 2 != 0)
+      if (0 != @{$soapdata} % 2)
       {
-         push @$soapdata, undef;  # even out the hash key/value pairs
+         push @{$soapdata}, undef;  # even out the hash key/value pairs
       }
-      $self->{soapdata} = {@$soapdata};
+      $self->{soapdata} = {@{$soapdata}};  # copy as hash
    }
    return $self;
 }
-#--------------------------------#
 
-=item getSOAPData
+=item $app->getSOAPData()
 
 Returns a hash of data passed to the application.  This is a massaged
 version of the C<soapdata> array passed to new().
@@ -317,9 +327,8 @@ sub getSOAPData
    my $self = shift;
    return %{$self->{soapdata}};
 }
-#--------------------------------#
 
-=item response KEY => VALUE, KEY => VALUE, ...
+=item $app->response($key1 => $value1, $key2 => $value2, ...)
 
 Prepare data to return from a SOAP method.  For example:
 
@@ -348,15 +357,14 @@ sub response
    my $self = shift;
    return $self->encodeHash({@_});
 }
-#--------------------------------#
 
-=item error
+=item $app->error()
 
-=item error FAULTCODE
+=item $app->error($faultcode)
 
-=item error FAULTCODE, FAULTSTRING
+=item $app->error($faultcode, $faultstring)
 
-=item error FAULTCODE, FAULTSTRING, KEY => VALUE, KEY => VALUE, ...
+=item $app->error($faultcode, $faultstring, $key1 => $value1, $key2 => $value2, ...)
 
 Emit a SOAP fault indicating a failure.  The C<faultcode> should be a
 short, computer-readable string (like "Error" or "Denied" or "BadID").
@@ -368,12 +376,12 @@ like this (namespaces and data types omitted for brevity).
   <Envelope>
     <Body>
       <Fault>
-        <faultcode>FAULTCODE</faultcode>
-        <faultstring>FAULTSTRING</faultstring>
+        <faultcode>$faultcode</faultcode>
+        <faultstring>$faultstring</faultstring>
         <detail>
           <data>
-            <KEY>VALUE</KEY>
-            <KEY>VALUE</KEY>
+            <$key1>$value1</$key1>
+            <$key2>$value2</$key2>
             ...
           </data>
         <detail>
@@ -386,24 +394,24 @@ like this (namespaces and data types omitted for brevity).
 sub error
 {
    my $pkg_or_self = shift;
-   my $code = shift || "Internal";
-   my $string = shift || "Application Error";
+   my $code        = shift || 'Internal';
+   my $string      = shift || 'Application Error';
    # rest of args handled below
 
    my $fault = SOAP::Fault->faultcode($code)->faultstring($string);
-   if (@_ > 0)
+   if (@_)
    {
-      if (@_ %2 != 0)
+      if (0 != @_ % 2)
       {
          push @_, undef;  # even out the hash key/value pairs
       }
-      $fault = $fault->faultdetail(SOAP::Data->name("data" => {@_}));
+      $fault = $fault->faultdetail(SOAP::Data->name('data' => {@_}));
    }
    die $fault;
+   return; # never get here
 }
-#--------------------------------#
 
-=item encodeHash HASHREF
+=item $app->encodeHash(\%hash)
 
 This is a helper function used by response() to encode hash data into
 a SOAP-friendly array of key-value pairs that are easily transformed
@@ -417,17 +425,20 @@ sub encodeHash
    my $pkg_or_self = shift;
    my $data = $_[0];
 
-   return @_ unless($data && ref($data) && ref($data) eq "HASH");
+   return @_ if (!$data);
+   return @_ if (!ref $data);
+   return @_ if ('HASH' ne ref $data);
+
    my @out;
-   foreach my $key (sort keys %$data)
+   foreach my $key (sort keys %{$data})
    {
       push @out, SOAP::Data->name($key => $data->{$key});
    }
    return @out;
 }
-#--------------------------------#
 
 1;
+
 __END__
 
 =back
